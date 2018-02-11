@@ -1,25 +1,111 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+output: md_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+# Assignment of Course5week2
 
+## Loading and Preprocessing the Data
+First the data was downloaded, unzipped and then read. After that the date variable was converted to date class.
 
+```{r loading code,cache=TRUE}
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", "./course5week2.zip")
+data<-unzip("course5week2.zip")
+data <- read.csv(data)
+data$date<-as.Date(as.character(data$date),"%Y-%m-%d")
+```
 
-## What is mean total number of steps taken per day?
+## Mean Total Number of Steps Taken Per Day With Missing Values Ignored
 
+Getting data set with no NA values and then summing the steps per days
 
+```{r number of steps taken per day, cache=TRUE}
+dataNoNa<-data[!(is.na(data$steps)),] #getting dataSet with no Na values
+totalStepsPerDay<-aggregate(steps~date,FUN=sum,data = dataNoNa) #summing data
+```
+Plotting the total steps per each day
 
-## What is the average daily activity pattern?
+```{r,cache=TRUE}
+library(ggplot2)
+p<-ggplot(data=totalStepsPerDay,aes(x=date,y=steps))
+p+geom_col() #plotting 
+```
+Calculating Mean and Median of the total number of steps taken per day
 
+```{r,cache=TRUE}
+totalMeanStepsPerDay<-aggregate(steps~date,FUN=mean,data = dataNoNa) #getting mean of steps per days
+totalMedianStepsPerDay<-aggregate(steps~date,FUN=median,data = dataNoNa) #getting median of steps per days
+meanAndMedian<-merge(totalMeanStepsPerDay,totalMedianStepsPerDay,by="date") #merging data by means of date
+names(meanAndMedian)<-c("Date","mean of Steps","median of steps") # changing name
+meanAndMedian
+```
 
+##  The Average Daily Activity Pattern
 
-## Imputing missing values
+Now we will average all steps per each 5 mint interval
 
+```{r,cache=TRUE}
+totalStepsPertime<-aggregate(steps~interval,FUN=mean,data = dataNoNa) #For Making a time series plotof the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+plot(totalStepsPertime$interval,totalStepsPertime$steps,type = "l",xlab = "Interval changing by 5 mint",ylab = "Steps")
+totalStepsPertime[totalStepsPertime$steps==max(totalStepsPertime$steps),] #showing at which interval maximum steps occur
 
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+## Imputing Missing Values
+ First shwoing the no of rows having missing values
+```{r missing rows,cache=TRUE}
+dataWithNa<-data[is.na(data$steps),]
+missingValues<-nrow(dataWithNa) #showing missing Values
+missingValues
+```
+
+To compute the missing values, average of all days was taken on each 5 mint interval from the data having no missng values. Then this average steps were included in the Na values of the missing data with the correct time interval
+
+```{r imputing values,cache=TRUE,results="hide"}
+totalStepsPertime<-aggregate(steps~interval,FUN=mean,data = dataNoNa)
+includingDataForNa<-merge(totalStepsPertime,dataWithNa,by="interval")
+includingDataForNa$steps.y<-NULL # deleting the steps.y variable.
+colnames(includingDataForNa)[2]<-"steps"  #changing name of the variable
+completeData<-rbind(includingDataForNa,dataNoNa)  #combining data of cpmute values and predata values
+library(dplyr)
+completeData<-arrange(completeData,date) # complete data arranged by date
+```
+A histogram of the total number of steps taken each day and Calculating and reporting the mean and median total number of steps taken per day
+
+```{r histogram,cache=TRUE}
+totalStepsPerDayx<-aggregate(steps~date,FUN=sum,data = completeData) #computing total steps per day for the new data
+q<-ggplot(data=totalStepsPerDayx,aes(x=date,y=steps))
+q+geom_col() #plotting histogram
+totalMeanStepsPerDayx<-aggregate(steps~date,FUN=mean,data = completeData) #getting mean of steps per days
+totalMedianStepsPerDayx<-aggregate(steps~date,FUN=median,data = completeData) #getting median of steps per days
+meanAndMedianx<-merge(totalMeanStepsPerDayx,totalMedianStepsPerDay,by="date") #merging data by means of date
+names(meanAndMedianx)<-c("Date","mean of Steps","median of steps") # changing name
+meanAndMedianx
+```
+By following the mean method for imputing values there is no change in the mean and median when compare to the mean and median calculated from Na values removed data.
+
+```{r change in calculation,cache=TRUE}
+changeInmean<-meanAndMedian$`mean of Steps`- meanAndMedianx$`mean of Steps`
+table(changeInmean)
+changeInMedian <-meanAndMedian$`median of steps` - meanAndMedianx$`median of steps`
+table(changeInMedian)
+```
+## Seeing Differences In Activity Patterns Between Weekdays and Weekends
+Creating a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r for new factor variable,cache=TRUE}
+weekdaysOfMonth <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday') #creating a factor variable of weekday and weekend
+completeData$whichDay <- factor((weekdays(completeData$date) %in% weekdaysOfMonth), 
+                   levels=c(FALSE, TRUE), labels=c('weekend', 'weekday') )
+```
+
+Making a panel plot containing a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). 
+
+```{r code for panel plot for weekdays and weekend, cache=TRUE}
+meanWrtIntervalAndDays<-aggregate(steps~interval+whichDay,FUN=mean,data = completeData) #arranging data with respect to days and interval
+qplot(interval,steps,data = meanWrtIntervalAndDays,geom = c("line"),facets = .~whichDay)
+```
+
